@@ -39,4 +39,58 @@ model User {
   role      Role     @default(PARENT_GUARDIAN)
   status    Status   @default(ACTIVE)
   createdAt DateTime @default(now())
+
+  bookings       Booking[] @relation("UserBookings")
+  driverBookings Booking[] @relation("DriverBookings")
+  driverProfile  Driver?
+}
+
+enum DriverStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+model Driver {
+  id        String       @id @default(uuid())
+  companyId String?
+  userId    String       @unique
+  user      User         @relation(fields: [userId], references: [id])
+  licenseNo String
+  wwcc      String
+  status    DriverStatus @default(PENDING_VERIFICATION)
+  vehicleId String?
+  postcode  String
+  createdAt DateTime     @default(now())
+
+  @@index([companyId])
+  @@index([vehicleId])
+  @@index([postcode])
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  EN_ROUTE
+  COMPLETED
+  CANCELLED
+}
+
+model Booking {
+  id          String        @id @default(uuid())
+  userId      String
+  user        User          @relation("UserBookings", fields: [userId], references: [id])
+  pickup      String
+  destination String
+  pickupTime  DateTime
+  status      BookingStatus @default(PENDING)
+  driverId    String?
+  driver      User?         @relation("DriverBookings", fields: [driverId], references: [id])
+  vehicleId   String?
+  paymentId   String?
+  createdAt   DateTime      @default(now())
+
+  @@index([userId])
+  @@index([driverId])
 }
