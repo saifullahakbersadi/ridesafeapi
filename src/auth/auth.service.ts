@@ -41,7 +41,7 @@ export class AuthService {
       },
     });
 
-    return this.buildAuthResponse(user);
+    return this.buildAuthResponse(user, true);
   }
 
   async login(dto: LoginDto) {
@@ -59,7 +59,7 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    return this.buildAuthResponse(user);
+    return this.buildAuthResponse(user, true);
   }
 
   private buildAuthResponse(user: {
@@ -71,13 +71,12 @@ export class AuthService {
     phone: string | null;
     status: string;
     createdAt: Date;
-  }) {
+  }, valid: boolean) {
     const payload: JwtPayload = {
       sub: user.id,
       email: user.email,
       role: user.role,
     };
-
     return {
       accessToken: this.jwtService.sign(payload),
       user: {
@@ -90,6 +89,7 @@ export class AuthService {
         status: user.status,
         createdAt: user.createdAt,
       },
+      validUser: valid
     };
   }
 }
