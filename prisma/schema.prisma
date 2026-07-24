@@ -78,18 +78,25 @@ enum BookingStatus {
 }
 
 model Booking {
-  id          String        @id @default(uuid())
-  userId      String
-  user        User          @relation("UserBookings", fields: [userId], references: [id])
-  pickup      String
-  destination String
-  pickupTime  DateTime
-  status      BookingStatus @default(PENDING)
-  driverId    String?
-  driver      User?         @relation("DriverBookings", fields: [driverId], references: [id])
-  vehicleId   String?
-  paymentId   String?
-  createdAt   DateTime      @default(now())
+  id                  String        @id @default(uuid())
+  userId              String
+  user                User          @relation("UserBookings", fields: [userId], references: [id])
+  pickup              String
+  pickupLat           Float?
+  pickupLng           Float?
+  destination         String
+  destinationLat      Float?
+  destinationLng      Float?
+  pickupTime          DateTime
+  estimatedTravelTime Int?
+  estimatedArrival    DateTime?
+  distance            Float?
+  status              BookingStatus @default(PENDING)
+  driverId            String?
+  driver              User?         @relation("DriverBookings", fields: [driverId], references: [id])
+  vehicleId           String?
+  paymentId           String?
+  createdAt           DateTime      @default(now())
 
   @@index([userId])
   @@index([driverId])

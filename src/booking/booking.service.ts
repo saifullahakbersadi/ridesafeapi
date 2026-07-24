@@ -3,12 +3,16 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateUserBookingDto } from './dto/update-user-booking.dto';
 import { DeleteUserBookingDto } from './dto/delete-user-booking.dto';
+import { TravelTimeService } from 'src/traveltime/traveltime.service';
 
 @Injectable()
 export class BookingService {
 
     private readonly logger  = new Logger(BookingService.name);
-    constructor(private prisma:PrismaService){}
+    constructor(
+        private prisma:PrismaService,
+        private readonly travelTimeService: TravelTimeService
+    ){}
 
     //Get bookings by userID
    async getBookingsByUserId(userId: string){
@@ -33,7 +37,38 @@ export class BookingService {
     //Create booking
     async createBooking(createBookingDto: CreateBookingDto){
         try{
-            const booking = await this.prisma.booking.create({ data: createBookingDto });
+            let estimatedTravelTime = createBookingDto.estimatedTravelTime;
+            let distance = createBookingDto.distance;
+
+            try{
+                const travelTime = await this.travelTimeService.getTravelTime(
+                    createBookingDto.pickupLng,
+                    createBookingDto.pickupLat,
+                    createBookingDto.destinationLng,
+                    createBookingDto.destinationLat,
+                );
+                
+                estimatedTravelTime = travelTime.durationMinutes;
+                distance = travelTime.distanceKm;
+                console.log(`Estimated travel time & distance ${estimatedTravelTime} & ${distance}`)
+            }catch(travelTimeError){
+                this.logger.warn(
+                    `Travel time service failed, falling back to client-supplied estimate: ${(travelTimeError as Error).message}`
+                );
+            }
+
+            const estimatedArrival = new Date(
+                new Date(createBookingDto.pickupTime).getTime() + estimatedTravelTime * 60_000
+            );
+
+            const booking = await this.prisma.booking.create({
+                data: {
+                    ...createBookingDto,
+                    estimatedTravelTime,
+                    distance,
+                    estimatedArrival,
+                }
+            });
             this.logger.log(`New booking created by ${booking.userId}`)
             return booking;
         }catch(error){
