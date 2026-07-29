@@ -8,9 +8,10 @@ import { UserController } from './user/user.controller';
 import { UserModule } from './user/user.module';
 import { BookingModule } from './booking/booking.module';
 import { TravelTimeModule } from './traveltime/traveltime.module';
+import { DriverModule } from './driver/driver.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UserModule, BookingModule, TravelTimeModule],
+  imports: [PrismaModule, AuthModule, UserModule, BookingModule, TravelTimeModule, DriverModule],
   controllers: [AppController, UserController],
   providers: [AppService, UserService],
 })

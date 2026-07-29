@@ -16,6 +16,10 @@ export class CreateBookingDto {
 
     @IsString()
     @IsNotEmpty()
+    pickupPostcode: string;
+
+    @IsString()
+    @IsNotEmpty()
     destination: string;
 
     @IsNumber()

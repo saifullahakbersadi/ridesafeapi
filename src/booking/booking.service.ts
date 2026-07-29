@@ -4,6 +4,8 @@ import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateUserBookingDto } from './dto/update-user-booking.dto';
 import { DeleteUserBookingDto } from './dto/delete-user-booking.dto';
 import { TravelTimeService } from 'src/traveltime/traveltime.service';
+import { DriverService } from 'src/driver/driver.service';
+import { EmailService } from 'src/email/email.service';
 
 @Injectable()
 export class BookingService {
@@ -11,7 +13,9 @@ export class BookingService {
     private readonly logger  = new Logger(BookingService.name);
     constructor(
         private prisma:PrismaService,
-        private readonly travelTimeService: TravelTimeService
+        private readonly travelTimeService: TravelTimeService,
+        private readonly driverService: DriverService,
+        private readonly emailService: EmailService
     ){}
 
     //Get bookings by userID
@@ -41,6 +45,7 @@ export class BookingService {
             let distance = createBookingDto.distance;
 
             try{
+                // Get travel time/estimated arrival using TravelTimeService
                 const travelTime = await this.travelTimeService.getTravelTime(
                     createBookingDto.pickupLng,
                     createBookingDto.pickupLat,
@@ -61,15 +66,67 @@ export class BookingService {
                 new Date(createBookingDto.pickupTime).getTime() + estimatedTravelTime * 60_000
             );
 
+            let driverId = createBookingDto.driverId;
+
+            if (!driverId){
+                try{
+                    const nearestDriver = await this.driverService.findDriver(
+                        {
+                            customerLat: createBookingDto.pickupLat,
+                            customerLng: createBookingDto.pickupLng,
+                        },
+                        createBookingDto.pickupPostcode,
+                    );
+
+                    if (nearestDriver){
+                        driverId = nearestDriver.driver.userId;
+                        this.logger.log(
+                            `Assigned nearest driver ${driverId} (${nearestDriver.distanceKm}km away)`
+                        );
+                    }else{
+                        this.logger.warn('No available driver found within dispatch range')
+                    }
+                }catch(driverSearchError){
+                    this.logger.warn(
+                        `Driver search failed, creating booking unassigned: ${(driverSearchError as Error).message}`
+                    );
+                }
+            }
+
             const booking = await this.prisma.booking.create({
                 data: {
                     ...createBookingDto,
                     estimatedTravelTime,
                     distance,
                     estimatedArrival,
+                    driverId,
+                },
+                include: {
+                    user: true,
+                    driver: true,
                 }
             });
             this.logger.log(`New booking created by ${booking.userId}`)
+            if (booking){
+                //Notify nearest driver & send email to user the pending booking
+                await this.emailService.sendEmail(
+                    booking.user.email,
+                    'Your booking is pending',
+                    `<p>Hi ${booking.user.firstName},</p>
+                     <p>Your booking from <strong>${booking.pickup}</strong> to <strong>${booking.destination}</strong>
+                     on ${booking.pickupTime.toLocaleString()} is pending confirmation.</p>`,
+                );
+
+                if (booking.driver){
+                    await this.emailService.sendEmail(
+                        booking.driver.email,
+                        'New booking assigned to you',
+                        `<p>Hi ${booking.driver.firstName},</p>
+                         <p>You've been assigned a new booking: pickup at <strong>${booking.pickup}</strong>,
+                         drop-off at <strong>${booking.destination}</strong>, on ${booking.pickupTime.toLocaleString()}.</p>`,
+                    );
+                }
+            }
             return booking;
         }catch(error){
             this.logger.error('Booking creation failed')

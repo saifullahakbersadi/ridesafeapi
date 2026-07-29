@@ -53,16 +53,17 @@ enum DriverStatus {
 }
 
 model Driver {
-  id        String       @id @default(uuid())
-  companyId String?
-  userId    String       @unique
-  user      User         @relation(fields: [userId], references: [id])
-  licenseNo String
-  wwcc      String
-  status    DriverStatus @default(PENDING_VERIFICATION)
-  vehicleId String?
-  postcode  String
-  createdAt DateTime     @default(now())
+  id               String       @id @default(uuid())
+  companyId        String?
+  userId           String       @unique
+  user             User         @relation(fields: [userId], references: [id])
+  licenseNo        String
+  status           DriverStatus @default(PENDING_VERIFICATION)
+  vehicleId        String?
+  postcode         String
+  createdAt        DateTime     @default(now())
+  driverAddressLat Float?
+  driverAddressLng Float?
 
   @@index([companyId])
   @@index([vehicleId])
@@ -84,6 +85,7 @@ model Booking {
   pickup              String
   pickupLat           Float?
   pickupLng           Float?
+  pickupPostcode      String?
   destination         String
   destinationLat      Float?
   destinationLng      Float?
