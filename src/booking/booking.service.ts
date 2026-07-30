@@ -131,7 +131,7 @@ export class BookingService {
                             `<p>Hi ${booking.driver.firstName},</p>
                             <p>You've been assigned a new booking: pickup at <strong>${booking.pickup}</strong>,
                             drop-off at <strong>${booking.destination}</strong>, on ${booking.pickupTime.toLocaleString()}.</p><br>
-                            <a href="${booking.driver.id}/booking/${booking.id}">Accept Trip</a>`,
+                            <a href="${process.env.PROD_URL}/${booking.driver.id}/booking/${booking.id}">Accept Trip</a>`,
                         );
                     }
                 }
