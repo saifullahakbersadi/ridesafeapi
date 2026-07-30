@@ -1,10 +1,13 @@
-import { ConflictException, Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { TravelTimeService } from 'src/traveltime/traveltime.service';
 import { JwtPayload } from 'src/auth/auth.types';
 import { RegisterDriverDto } from './dto/register-driver.dto';
+import { DriverStatus } from 'generated/prisma/enums';
+import { EmailService } from 'src/email/email.service';
+import { UpdateDriverDto } from './dto/update-driver.dto';
 
 const MAX_DISPATCH_DISTANCE_KM = 10;
 const SALT_ROUNDS = 10;
@@ -22,6 +25,7 @@ export class DriverService {
     private readonly prisma: PrismaService,
     private readonly travelTimeService: TravelTimeService,
     private readonly jwtService: JwtService,
+    private readonly emailService: EmailService,
   ) {}
 
   async registerDriver(dto: RegisterDriverDto) {
@@ -137,9 +141,95 @@ export class DriverService {
       durationMinutes: nearestDriver.travelTime.durationMinutes,
     };
   }
-  
+
   //Get all driver
-  getAllDriver(){
+  getAllDriver() {
     return this.prisma.driver.findMany();
+  }
+
+  async driverVerified(id: string) {
+    try {
+      const driverVerified = await this.prisma.driver.update({
+        where: {
+          id: id,
+        },
+        data: {
+          status: DriverStatus.ACTIVE,
+        },
+        include: {
+          user: true,
+        },
+      });
+      if (driverVerified.status === DriverStatus.ACTIVE) {
+        try {
+          await this.emailService.sendEmail(
+            driverVerified.user.email,
+            'Your account is now verified',
+            `<p>You account ${driverVerified.id} is now active.</p>`,
+          );
+        } catch (error) {
+          this.logger.warn(
+            `Unable to send email ${id}: ${(error as Error).message}`,
+          );
+          return {
+            message: 'Not able to send email',
+          };
+        }
+      }
+
+      return {
+        data: {
+          driverEmail: driverVerified.user.email,
+          status: driverVerified.status,
+        },
+      };
+    } catch (error) {
+      this.logger.warn(
+        `Unable to update driver ${id}: ${(error as Error).message}`,
+      );
+      throw new NotFoundException(`Driver with id ${id} not found`);
+    }
+  }
+
+  async updateDriver(id: string, updateDriver: UpdateDriverDto){
+    const driverExists = await this.prisma.driver.findUnique({
+        where:{
+            id: id
+        },
+        include: {
+            user: true
+        }
+    })
+    if (!driverExists){
+        this.logger.error('Unable to find driver')
+        throw new NotFoundException(`Driver with id ${id} not found`);
+    }
+
+    const {
+        firstName,
+        lastName,
+        phone,
+        licenseNo,
+        postcode,
+        driverAddressLat,
+        driverAddressLng,
+        companyId,
+        vehicleId,
+    } = updateDriver;
+
+    return this.prisma.$transaction(async (tx) => {
+        if (firstName !== undefined || lastName !== undefined || phone !== undefined){
+            await tx.user.update({
+                where: { id: driverExists.userId },
+                data: { firstName, lastName, phone },
+            })
+        }
+
+        return tx.driver.update({
+            where: { id },
+            data: { licenseNo, postcode, driverAddressLat, driverAddressLng, companyId, vehicleId },
+            include: { user: true },
+        })
+    })
   }
 }
