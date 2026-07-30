@@ -43,8 +43,13 @@ export class BookingService {
         try{
             let estimatedTravelTime = createBookingDto.estimatedTravelTime;
             let distance = createBookingDto.distance;
-
+            const userExist = await this.prisma.user.findUnique({
+                    where: {
+                        id: createBookingDto.userId
+                    }
+            })
             try{
+                
                 // Get travel time/estimated arrival using TravelTimeService
                 const travelTime = await this.travelTimeService.getTravelTime(
                     createBookingDto.pickupLng,
@@ -92,42 +97,51 @@ export class BookingService {
                     );
                 }
             }
-
-            const booking = await this.prisma.booking.create({
-                data: {
-                    ...createBookingDto,
-                    estimatedTravelTime,
-                    distance,
-                    estimatedArrival,
-                    driverId,
-                },
-                include: {
-                    user: true,
-                    driver: true,
-                }
-            });
-            this.logger.log(`New booking created by ${booking.userId}`)
-            if (booking){
-                //Notify nearest driver & send email to user the pending booking
-                await this.emailService.sendEmail(
-                    booking.user.email,
-                    'Your booking is pending',
-                    `<p>Hi ${booking.user.firstName},</p>
-                     <p>Your booking from <strong>${booking.pickup}</strong> to <strong>${booking.destination}</strong>
-                     on ${booking.pickupTime.toLocaleString()} is pending confirmation.</p>`,
-                );
-
-                if (booking.driver){
+            if (userExist){
+            
+                const booking = await this.prisma.booking.create({
+                    data: {
+                        ...createBookingDto,
+                        estimatedTravelTime,
+                        distance,
+                        estimatedArrival,
+                        driverId,
+                    },
+                    include: {
+                        user: true,
+                        driver: true,
+                    }
+                });
+                this.logger.log(`New booking created by ${booking.userId}`)
+                
+                if (booking){
+                    //Notify nearest driver & send email to user the pending booking
                     await this.emailService.sendEmail(
-                        booking.driver.email,
-                        'New booking assigned to you',
-                        `<p>Hi ${booking.driver.firstName},</p>
-                         <p>You've been assigned a new booking: pickup at <strong>${booking.pickup}</strong>,
-                         drop-off at <strong>${booking.destination}</strong>, on ${booking.pickupTime.toLocaleString()}.</p>`,
+                        booking.user.email,
+                        'Your booking is pending',
+                        `<p>Hi ${booking.user.firstName},</p>
+                        <p>Your booking from <strong>${booking.pickup}</strong> to <strong>${booking.destination}</strong>
+                        on ${booking.pickupTime.toLocaleString()} is pending confirmation.</p>`,
                     );
+
+                    if (booking.driver){
+                        await this.emailService.sendEmail(
+                            booking.driver.email,
+                            'New booking assigned to you',
+                            `<p>Hi ${booking.driver.firstName},</p>
+                            <p>You've been assigned a new booking: pickup at <strong>${booking.pickup}</strong>,
+                            drop-off at <strong>${booking.destination}</strong>, on ${booking.pickupTime.toLocaleString()}.</p><br>
+                            <a href="${booking.driver.id}/booking/${booking.id}">Accept Trip</a>`,
+                        );
+                    }
                 }
+                return booking;
+            }else{
+                this.logger.error('UserID verification failed')
+                throw new NotFoundException(
+                    'Unable to find User'
+                );
             }
-            return booking;
         }catch(error){
             this.logger.error('Booking creation failed')
             throw new InternalServerErrorException(

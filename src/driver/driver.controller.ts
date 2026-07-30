@@ -1,7 +1,6 @@
 import { Body, Controller, Get, Param, Post, Patch } from '@nestjs/common';
 import { DriverService } from './driver.service';
-import { RegisterDriverDto } from './dto/register-driver.dto';
-import bodyParser from 'body-parser';
+import { RegisterDriverDto } from './dto/register-driver.dto'
 import { UpdateDriverDto } from './dto/update-driver.dto';
 
 @Controller('driver')
@@ -33,5 +32,13 @@ export class DriverController {
         @Body() updateDriverDto: UpdateDriverDto
     ){
         return this.driverService.updateDriver(id, updateDriverDto)
+    }
+
+    @Patch(':driverId/booking/:bookingId')
+    driverAcceptBooking(
+        @Param('driverId') driverId: string,
+        @Param('bookingId') bookingId: string
+    ){
+        this.driverService.driverAcceptBooing(driverId,bookingId)
     }
 }

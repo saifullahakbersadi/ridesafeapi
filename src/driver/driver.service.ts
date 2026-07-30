@@ -5,7 +5,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { TravelTimeService } from 'src/traveltime/traveltime.service';
 import { JwtPayload } from 'src/auth/auth.types';
 import { RegisterDriverDto } from './dto/register-driver.dto';
-import { DriverStatus } from 'generated/prisma/enums';
+import { BookingStatus, DriverStatus } from 'generated/prisma/enums';
 import { EmailService } from 'src/email/email.service';
 import { UpdateDriverDto } from './dto/update-driver.dto';
 
@@ -231,5 +231,38 @@ export class DriverService {
             include: { user: true },
         })
     })
+  }
+
+  async driverAcceptBooing(driverId:string, bookingId: string){
+    const bookingExist = await this.prisma.booking.findUnique({
+        where:{
+            id: bookingId
+        },
+        include: {
+            driver: true
+        }
+    })
+
+    if (!bookingExist){
+        this.logger.error('Unable to find booking')
+        throw new NotFoundException(`Booking with id ${bookingId} not found`);
+    }
+
+    if (bookingExist.driverId === driverId){
+        await this.prisma.booking.update({
+            where: {
+                id: bookingExist.id
+            },
+            data: {
+                status: BookingStatus.CONFIRMED
+            }
+        })
+
+        return {
+            message: "Booking Accepted",
+            status: bookingExist.status
+        }
+    }
+
   }
 }
