@@ -6,6 +6,7 @@ import { DeleteUserBookingDto } from './dto/delete-user-booking.dto';
 import { TravelTimeService } from 'src/traveltime/traveltime.service';
 import { DriverService } from 'src/driver/driver.service';
 import { EmailService } from 'src/email/email.service';
+import { JwtService } from '@nestjs/jwt';
 
 @Injectable()
 export class BookingService {
@@ -15,7 +16,8 @@ export class BookingService {
         private prisma:PrismaService,
         private readonly travelTimeService: TravelTimeService,
         private readonly driverService: DriverService,
-        private readonly emailService: EmailService
+        private readonly emailService: EmailService,
+        private readonly jwt: JwtService
     ){}
 
     //Get bookings by userID
@@ -125,13 +127,22 @@ export class BookingService {
                     );
 
                     if (booking.driver){
+                        const acceptToken = this.jwt.sign(
+                            {
+                                sub: booking.driver.id,
+                                bookingId: booking.id,
+                                purpose: 'accept-booking',
+                            },
+                            { expiresIn: '1h' },
+                        );
+
                         await this.emailService.sendEmail(
                             booking.driver.email,
                             'New booking assigned to you',
                             `<p>Hi ${booking.driver.firstName},</p>
                             <p>You've been assigned a new booking: pickup at <strong>${booking.pickup}</strong>,
                             drop-off at <strong>${booking.destination}</strong>, on ${booking.pickupTime.toLocaleString()}.</p><br>
-                            <a href="${process.env.PROD_URL}/${booking.driver.id}/booking/${booking.id}">Accept Trip</a>`,
+                            <a href="${process.env.PROD_URL}/driver/${booking.driver.id}/booking/${booking.id}?token=${acceptToken}">Accept Trip</a>`,
                         );
                     }
                 }
