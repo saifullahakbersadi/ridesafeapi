@@ -1,4 +1,4 @@
-import { ConflictException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ConflictException, ForbiddenException, Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'src/prisma/prisma.service';
@@ -15,6 +15,12 @@ const SALT_ROUNDS = 10;
 interface FindNearestDriverParams {
   customerLat: number;
   customerLng: number;
+}
+
+interface AcceptBookingTokenPayload {
+  sub: string;
+  bookingId: string;
+  purpose: string;
 }
 
 @Injectable()
@@ -233,7 +239,19 @@ export class DriverService {
     })
   }
 
-  async driverAcceptBooing(driverId:string, bookingId: string){
+  async driverAcceptBooing(driverId:string, bookingId: string, token: string){
+    let payload: AcceptBookingTokenPayload;
+    try{
+        payload = this.jwtService.verify<AcceptBookingTokenPayload>(token);
+    }catch(error){
+        this.logger.warn(`Invalid or expired accept-booking token: ${(error as Error).message}`)
+        throw new UnauthorizedException('Invalid or expired token');
+    }
+
+    if (payload.purpose !== 'accept-booking' || payload.sub !== driverId || payload.bookingId !== bookingId){
+        throw new ForbiddenException('Token does not match this driver/booking');
+    }
+
     const bookingExist = await this.prisma.booking.findUnique({
         where:{
             id: bookingId
@@ -248,21 +266,22 @@ export class DriverService {
         throw new NotFoundException(`Booking with id ${bookingId} not found`);
     }
 
-    if (bookingExist.driverId === driverId){
-        await this.prisma.booking.update({
-            where: {
-                id: bookingExist.id
-            },
-            data: {
-                status: BookingStatus.CONFIRMED
-            }
-        })
-
-        return {
-            message: "Booking Accepted",
-            status: bookingExist.status
-        }
+    if (bookingExist.driverId !== driverId){
+        throw new ForbiddenException('You are not assigned to this booking');
     }
 
+    const updatedBooking = await this.prisma.booking.update({
+        where: {
+            id: bookingExist.id
+        },
+        data: {
+            status: BookingStatus.CONFIRMED
+        }
+    })
+
+    return {
+        message: "Booking Accepted",
+        status: updatedBooking.status
+    }
   }
 }
